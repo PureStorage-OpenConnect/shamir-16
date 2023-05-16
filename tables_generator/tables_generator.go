@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"os"
 
-	"purestorage.com/congo/secrets/shamir"
+	"github.com/PureStorage-OpenConnect/shamir-16"
 )
 
 var placeholder_header string = `package shamir

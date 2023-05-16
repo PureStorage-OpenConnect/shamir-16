@@ -163,14 +163,37 @@ func TestSplitCombine(t *testing.T) {
 	}
 }
 
+func TestCombineDuplicates(t *testing.T) {
+	secret := Secret("test")
+
+	out, err := Split(secret, 5, 3)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+
+	// Append the parts after itself to duplicate all the parts
+	out = append(out, out...)
+
+	_, err = Combine(out)
+	if err == nil {
+		t.Fatalf("expected err, got nil")
+	}
+}
+
 func benchmarkShamir(parts int, b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		// use SHA256 to create random-looking deterministic secret
 		secret := sha256.Sum256(Secret("key"))
 		threshold := parts / 2
 
-		out, _ := Split(secret[:], parts, threshold)
-		_, _ = Combine(out)
+		out, err := Split(secret[:], parts, threshold)
+		if err != nil {
+			b.Fatalf("error in Split: %v", err)
+		}
+		_, err = Combine(out)
+		if err != nil {
+			b.Fatalf("error in Combine: %v", err)
+		}
 	}
 }
 
@@ -247,7 +270,11 @@ func TestField_Divide_Zero(t *testing.T) {
 
 	// If panicked correctly, recover() will be called, otherwise the error is printed
 
-	defer func() { recover() }()
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("Expected a panic")
+		}
+	}()
 	div(1, 0)
 	t.Errorf("Should have panicked")
 }

@@ -6,10 +6,6 @@ import (
 	"crypto/subtle"
 	"encoding/binary"
 	"fmt"
-	mathrand "math/rand"
-	"time"
-
-	"github.com/hashicorp/errwrap"
 )
 
 const (
@@ -180,18 +176,14 @@ func Split(secret Secret, parts, threshold int) ([]Part, error) {
 
 	secret16 := byteToUint16(secret)
 
-	// Generate list of unique x coordinates (non-zero is ensured later by +1)
-	// See https://crypto.stackexchange.com/a/63490 for reasoning about x values
-	mathrand.Seed(time.Now().UnixNano())
-	xCoordinates := mathrand.Perm(parts)
-
 	// Allocate the output array, initialize the final word
 	// of the output with the offset. The representation of each
 	// output is {y1, y2, .., yN, x}.
+	// See https://crypto.stackexchange.com/a/63490 for reasoning about x values
 	out16 := make([][]uint16, parts)
 	for idx := range out16 {
 		out16[idx] = make([]uint16, len(secret16)+1)
-		out16[idx][len(secret16)] = uint16(xCoordinates[idx]) + 1
+		out16[idx][len(secret16)] = uint16(idx) + 1
 	}
 
 	// Construct a random polynomial for each word of the secret.
@@ -201,14 +193,14 @@ func Split(secret Secret, parts, threshold int) ([]Part, error) {
 	for idx, val := range secret16 {
 		p, err := makePolynomial(val, uint16(threshold-1))
 		if err != nil {
-			return nil, errwrap.Wrapf("failed to generate polynomial: {{err}}", err)
+			return nil, fmt.Errorf("failed to generate polynomial: %w", err)
 		}
 
 		// Generate a `parts` number of (x,y) pairs
 		// We cheat by encoding the x value once as the final index,
 		// so that it only needs to be stored once.
 		for i := 0; i < parts; i++ {
-			x := uint16(xCoordinates[i]) + 1
+			x := uint16(i) + 1
 			y := p.evaluate(x)
 			out16[i][idx] = y
 		}
@@ -279,7 +271,7 @@ func Combine(parts []Part) (Secret, error) {
 
 		// Compute every word of secret in separate goroutine.
 		// Experimentally, this is about 2x as fast for GOMAXPROCS => 8,
-		// with virtually no overhead if paralelization is not an option.
+		// with virtually no overhead if parallelization is not an option.
 		go func(queue chan struct {
 			int
 			uint16
